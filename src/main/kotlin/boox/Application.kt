@@ -1,69 +1,52 @@
 package boox
 
+import kotlinx.html.*
+import kotlinx.html.stream.createHTML
 import org.http4k.core.Method
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.OK
-import org.http4k.core.then
-import org.http4k.filter.ServerFilters
 import org.http4k.routing.bind
+import org.http4k.routing.path
 import org.http4k.routing.routes
 import org.http4k.server.SunHttp
 import org.http4k.server.asServer
-import kotlinx.html.stream.appendHTML
-import kotlinx.html.*
-import kotlinx.html.dom.*
-
-var buttonPressed = 0
+import java.nio.file.Files
+import java.nio.file.Path
 
 fun main() {
-    
-    ServerFilters.CatchLensFailure
-    .then(
-        routes(
-           mainRoute(),
-           buttonRoute()
-        )           
-    ).asServer(SunHttp(8080))
-    .start()
+    routes(mainRoute(), readFile(), readMdFile())
+        .asServer(SunHttp(8080))
+        .start()
 }
 
-fun mainRoute() = "/" bind Method.GET to { 
-    Response(OK).body(bodyHtml{
-        div {
-            h1{ + "Hello Boox" }
-            button() { 
-                attributes["hx-post"] = "/button"
-                attributes["hx-target"] = "#pressed"
-                + "button"
-            }
-        }
-        div {
-            id="pressed"
-            h2{
-                +"Button pressed $buttonPressed ${if(buttonPressed == 1) "time" else "times"}"
-            }
-        }
-    })
+fun mainRoute() = "/" bind Method.GET to {
+    Response(OK).body("")
 }
 
-fun buttonRoute() = "/button" bind Method.POST to {
-    buttonPressed++
-    Response(OK).body(bodyHtml{
-        div {
-            id="pressed"
-            h2{
-                +"Button pressed $buttonPressed ${if(buttonPressed == 1) "time" else "times"}"
-            }
-        }
-    })
+fun readFile() = "/{readme}" bind Method.GET to {req ->
+    val resource = {}.javaClass.getResource("/${req.path("readme")!!}")
+    Response(OK).body(mdReader(resource!!.path))
+}
+
+fun readMdFile() = "/md/{readme}" bind Method.GET to {req ->
+    val resource = {}.javaClass.getResource("/${req.path("readme")!!}")?.path
+    Response(OK).body(Files.readAllLines(Path.of(resource!!)).joinToString())
 }
 
 
-fun bodyHtml(block: BODY.() -> Unit) = buildString {appendHTML().
-    html{ 
-        head {
-            script(type = ScriptType.textJScript, src= "https://unpkg.com/htmx.org@2.0.1" ) {}
+fun mdReader(path: String): String =
+    createHTML().html {
+        body {
+            Files.readAllLines(Path.of(path))
+                .map { line ->
+                    when {
+                        line.startsWith("# ") -> h1 { + line.replace("# ", "") }
+                        line.startsWith("## ") -> h2 { + line.replace("## ", "") }
+                        line.startsWith("### ") -> h3 { + line.replace("### ", "") }
+                        line.startsWith("#### ") -> h4 { + line.replace("#### ", "") }
+                        line.startsWith("##### ") -> h5 { + line.replace("##### ", "") }
+                        line.startsWith("###### ") -> h6 { + line.replace("###### ", "") }
+                    }
+                }
         }
-        body(block = block)
     }
-}
