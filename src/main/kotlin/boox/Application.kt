@@ -1,52 +1,59 @@
 package boox
 
-import kotlinx.html.*
-import kotlinx.html.stream.createHTML
-import org.http4k.core.Method
-import org.http4k.core.Response
-import org.http4k.core.Status.Companion.OK
-import org.http4k.routing.bind
-import org.http4k.routing.path
-import org.http4k.routing.routes
-import org.http4k.server.SunHttp
-import org.http4k.server.asServer
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.Application
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.html.respondHtml
+import io.ktor.server.netty.Netty
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import kotlinx.html.HTML
+import kotlinx.html.body
+import kotlinx.html.h1
+import kotlinx.html.h2
+import kotlinx.html.h3
+import kotlinx.html.h4
+import kotlinx.html.h5
+import kotlinx.html.h6
 import java.nio.file.Files
 import java.nio.file.Path
 
 fun main() {
-    routes(mainRoute(), readFile(), readMdFile())
-        .asServer(SunHttp(8080))
-        .start()
+    embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::module)
+        .start(wait = true)
 }
 
-fun mainRoute() = "/" bind Method.GET to {
-    Response(OK).body("")
+fun Application.module() {
+    configureRouting()
 }
 
-fun readFile() = "/{readme}" bind Method.GET to {req ->
-    val resource = {}.javaClass.getResource("/${req.path("readme")!!}")
-    Response(OK).body(mdReader(resource!!.path))
-}
-
-fun readMdFile() = "/md/{readme}" bind Method.GET to {req ->
-    val resource = {}.javaClass.getResource("/${req.path("readme")!!}")?.path
-    Response(OK).body(Files.readAllLines(Path.of(resource!!)).joinToString())
-}
-
-
-fun mdReader(path: String): String =
-    createHTML().html {
-        body {
-            Files.readAllLines(Path.of(path))
-                .map { line ->
-                    when {
-                        line.startsWith("# ") -> h1 { + line.replace("# ", "") }
-                        line.startsWith("## ") -> h2 { + line.replace("## ", "") }
-                        line.startsWith("### ") -> h3 { + line.replace("### ", "") }
-                        line.startsWith("#### ") -> h4 { + line.replace("#### ", "") }
-                        line.startsWith("##### ") -> h5 { + line.replace("##### ", "") }
-                        line.startsWith("###### ") -> h6 { + line.replace("###### ", "") }
-                    }
-                }
+fun Application.configureRouting() {
+    routing {
+        get("/") {
+            call.respondText("Hello World!")
+        }
+        get("/{readme}") {
+            val resource = {}.javaClass.getResource("/${call.parameters["readme"]!!}")
+            call.respondHtml(HttpStatusCode.OK) {
+                parseMdToHtml(resource!!.path)
+            }
         }
     }
+}
+
+fun HTML.parseMdToHtml(resource: String) {
+    body {
+        Files.readAllLines(Path.of(resource))
+            .map { line ->
+                when {
+                    line.startsWith("# ") -> h1 { +line.replace("# ", "") }
+                    line.startsWith("## ") -> h2 { +line.replace("## ", "") }
+                    line.startsWith("### ") -> h3 { +line.replace("### ", "") }
+                    line.startsWith("#### ") -> h4 { +line.replace("#### ", "") }
+                    line.startsWith("##### ") -> h5 { +line.replace("##### ", "") }
+                    line.startsWith("###### ") -> h6 { +line.replace("###### ", "") }
+                }
+            }
+    }
+}
